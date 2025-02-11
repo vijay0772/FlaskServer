@@ -7,32 +7,38 @@ from scipy.spatial import KDTree
 import time
 
 app = Flask(__name__)
-CORS(app)  # Allow frontend access
+CORS(app)  # Enable CORS for frontend access
 
-# ✅ Fetch Live Balloon Data from Windborne API (Handling NaN & Inf)
+# ✅ Root route to check if server is running
+@app.route('/')
+def home():
+    return jsonify({"message": "Flask Server is Running!"})
+
+# ✅ Fetch Live Balloon Data (Handling NaN & Inf)
 def get_balloon_data():
     url = "https://a.windbornesystems.com/treasure/02.json"
-    response = requests.get(url)
-
-    if response.status_code == 200:
-        raw_data = response.json()
-        balloons = []
-
-        for entry in raw_data:
-            if len(entry) == 3:  # Ensure valid format
-                lat, lon, alt = entry
-                if not (np.isnan(lat) or np.isnan(lon) or np.isnan(alt) or np.isinf(lat) or np.isinf(lon) or np.isinf(alt)):
-                    balloons.append({
-                        "latitude": lat,
-                        "longitude": lon,
-                        "altitude": alt * 1000  # Convert km to meters
-                    })
-
-        print(f"✅ {len(balloons)} valid weather balloons detected.")
-        return balloons
-    else:
-        print(f"❌ Error fetching balloon data (Status Code: {response.status_code})")
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"❌ Error fetching balloon data: {e}")
         return []
+
+    raw_data = response.json()
+    balloons = []
+
+    for entry in raw_data:
+        if len(entry) == 3:  # Ensure valid format
+            lat, lon, alt = entry
+            if not (np.isnan(lat) or np.isnan(lon) or np.isnan(alt) or np.isinf(lat) or np.isinf(lon) or np.isinf(alt)):
+                balloons.append({
+                    "latitude": lat,
+                    "longitude": lon,
+                    "altitude": alt * 1000  # Convert km to meters
+                })
+
+    print(f"✅ {len(balloons)} valid weather balloons detected.")
+    return balloons
 
 # ✅ Caching Flight Data (Refreshes every 60 seconds)
 cached_flight_data = []
@@ -47,28 +53,29 @@ def get_flight_data():
         return cached_flight_data
 
     url = "https://opensky-network.org/api/states/all"
-    response = requests.get(url)
-
-    if response.status_code == 200:
-        flight_data = response.json().get("states", [])
-        flights = []
-
-        for flight in flight_data:
-            if flight[5] and flight[6] and flight[7]:  # Ensure valid lat, lon, alt
-                flights.append({
-                    "callsign": flight[1].strip() if flight[1] else "Unknown",
-                    "latitude": flight[6],
-                    "longitude": flight[5],
-                    "altitude": flight[7]
-                })
-
-        cached_flight_data = flights
-        last_flight_fetch_time = time.time()
-        print(f"✅ {len(flights)} aircraft detected and cached.")
-        return flights
-    else:
-        print("❌ Error fetching flight data")
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"❌ Error fetching flight data: {e}")
         return cached_flight_data  # Return last known data instead of failing
+
+    flight_data = response.json().get("states", [])
+    flights = []
+
+    for flight in flight_data:
+        if flight[5] and flight[6] and flight[7]:  # Ensure valid lat, lon, alt
+            flights.append({
+                "callsign": flight[1].strip() if flight[1] else "Unknown",
+                "latitude": flight[6],
+                "longitude": flight[5],
+                "altitude": flight[7]
+            })
+
+    cached_flight_data = flights
+    last_flight_fetch_time = time.time()
+    print(f"✅ {len(flights)} aircraft detected and cached.")
+    return flights
 
 # ✅ Optimized Risk Detection (Handles Missing Data)
 def detect_risks(flights, balloons):
@@ -77,7 +84,7 @@ def detect_risks(flights, balloons):
         print("⚠️ No valid data for risk detection.")
         return []
 
-    # ✅ Build KDTree for fast lookup (Handles missing balloon positions)
+    # ✅ Build KDTree for fast lookup
     try:
         balloon_positions = [(b["latitude"], b["longitude"]) for b in balloons]
         if len(balloon_positions) > 0:
@@ -133,5 +140,6 @@ def get_alerts():
     alerts = detect_risks(flights, balloons)
     return jsonify(alerts)
 
+# ✅ Ensure it runs on deployed environments
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
