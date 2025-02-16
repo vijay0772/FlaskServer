@@ -16,15 +16,17 @@ def home():
 
 # ✅ Fetch Live Balloon Data (Handling NaN & Inf)
 def get_balloon_data():
-    url = "https://a.windbornesystems.com/treasure/03.json"
+    url = "https://a.windbornesystems.com/treasure/02.json"
     try:
         response = requests.get(url, timeout=10)
+        print("response", response)
         response.raise_for_status()
     except requests.RequestException as e:
         print(f"❌ Error fetching balloon data: {e}")
         return []
 
     raw_data = response.json()
+    print(f"�� Received {len(raw_data)} weather balloon entries.")
     balloons = []
 
     for entry in raw_data:
