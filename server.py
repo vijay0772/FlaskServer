@@ -16,7 +16,7 @@ def home():
 
 # ✅ Fetch Live Balloon Data (Handling NaN & Inf)
 def get_balloon_data():
-    url = "https://a.windbornesystems.com/treasure/02.json"
+    url = "https://a.windbornesystems.com/treasure/03.json"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
